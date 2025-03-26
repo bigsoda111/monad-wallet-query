@@ -170,37 +170,34 @@ async function getTransactionHistory(address) {
     const dayBlocks = 86400; // 一天的区块数
     const fromBlock = currentBlock - (dayBlocks * 30); // 获取最近30天的交易
 
-    // 获取交易历史
-    const filter = {
-      address,
-      fromBlock,
-      toBlock: currentBlock
-    };
+    // 获取区块历史
+    const blocks = [];
+    for (let i = fromBlock; i <= currentBlock; i++) {
+      const block = await provider.getBlock(i, true);
+      if (block) {
+        blocks.push(block);
+      }
+    }
 
-    // 获取交易日志
-    const logs = await provider.getLogs(filter);
-    
-    // 获取交易详情
-    const transactions = await Promise.all(
-      logs.map(async (log) => {
-        try {
-          const tx = await provider.getTransaction(log.transactionHash);
-          return {
-            hash: log.transactionHash,
-            timestamp: tx.timestamp,
+    // 过滤出与地址相关的交易
+    const transactions = [];
+    for (const block of blocks) {
+      for (const tx of block.transactions) {
+        if (tx.from.toLowerCase() === address.toLowerCase() || 
+            (tx.to && tx.to.toLowerCase() === address.toLowerCase())) {
+          transactions.push({
+            hash: tx.hash,
+            timestamp: block.timestamp,
             from: tx.from,
             to: tx.to,
             value: tx.value.toString(),
-            blockNumber: tx.blockNumber
-          };
-        } catch (error) {
-          console.error(`Error fetching transaction ${log.transactionHash}:`, error);
-          return null;
+            blockNumber: block.number
+          });
         }
-      })
-    );
+      }
+    }
 
-    return transactions.filter(tx => tx !== null);
+    return transactions;
   } catch (error) {
     console.error('Error fetching transaction history:', error);
     return [];
@@ -226,39 +223,32 @@ async function getContractInteractions(address) {
     const dayBlocks = 86400; // 一天的区块数
     const fromBlock = currentBlock - (dayBlocks * 30); // 获取最近30天的交易
 
-    // 获取合约交互
-    const filter = {
-      address,
-      fromBlock,
-      toBlock: currentBlock
-    };
+    // 获取区块历史
+    const blocks = [];
+    for (let i = fromBlock; i <= currentBlock; i++) {
+      const block = await provider.getBlock(i, true);
+      if (block) {
+        blocks.push(block);
+      }
+    }
 
-    const logs = await provider.getLogs(filter);
-    
-    // 过滤出合约交互（有 topics 的日志）
-    const contractInteractions = logs.filter(log => log.topics.length > 0);
-    
-    // 获取交互详情
-    const interactions = await Promise.all(
-      contractInteractions.map(async (log) => {
-        try {
-          const tx = await provider.getTransaction(log.transactionHash);
-          return {
-            hash: log.transactionHash,
-            timestamp: tx.timestamp,
+    // 过滤出合约交互
+    const contractInteractions = [];
+    for (const block of blocks) {
+      for (const tx of block.transactions) {
+        if (tx.to && tx.to.toLowerCase() === address.toLowerCase() && tx.data !== '0x') {
+          contractInteractions.push({
+            hash: tx.hash,
+            timestamp: block.timestamp,
             from: tx.from,
             to: tx.to,
-            topics: log.topics,
-            data: log.data
-          };
-        } catch (error) {
-          console.error(`Error fetching contract interaction ${log.transactionHash}:`, error);
-          return null;
+            data: tx.data
+          });
         }
-      })
-    );
+      }
+    }
 
-    return interactions.filter(interaction => interaction !== null);
+    return contractInteractions;
   } catch (error) {
     console.error('Error fetching contract interactions:', error);
     return [];
