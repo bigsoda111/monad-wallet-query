@@ -170,18 +170,47 @@ async function getTransactionHistory(address) {
     const dayBlocks = 86400; // 一天的区块数
     const fromBlock = currentBlock - (dayBlocks * 30); // 获取最近30天的交易
 
-    // 获取区块历史
-    const blocks = [];
-    for (let i = fromBlock; i <= currentBlock; i++) {
-      const block = await provider.getBlock(i, true);
-      if (block) {
-        blocks.push(block);
+    // 使用批量查询获取区块
+    const blockPromises = [];
+    const batchSize = 10; // 每次查询10个区块
+    for (let i = fromBlock; i <= currentBlock; i += batchSize) {
+      const endBlock = Math.min(i + batchSize - 1, currentBlock);
+      blockPromises.push(provider.getBlock(i, true));
+      if (i + 1 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 1, true));
+      }
+      if (i + 2 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 2, true));
+      }
+      if (i + 3 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 3, true));
+      }
+      if (i + 4 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 4, true));
+      }
+      if (i + 5 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 5, true));
+      }
+      if (i + 6 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 6, true));
+      }
+      if (i + 7 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 7, true));
+      }
+      if (i + 8 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 8, true));
+      }
+      if (i + 9 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 9, true));
       }
     }
 
+    const blocks = await Promise.all(blockPromises);
+    const validBlocks = blocks.filter(block => block !== null);
+
     // 过滤出与地址相关的交易
     const transactions = [];
-    for (const block of blocks) {
+    for (const block of validBlocks) {
       for (const tx of block.transactions) {
         if (tx.from.toLowerCase() === address.toLowerCase() || 
             (tx.to && tx.to.toLowerCase() === address.toLowerCase())) {
@@ -223,18 +252,47 @@ async function getContractInteractions(address) {
     const dayBlocks = 86400; // 一天的区块数
     const fromBlock = currentBlock - (dayBlocks * 30); // 获取最近30天的交易
 
-    // 获取区块历史
-    const blocks = [];
-    for (let i = fromBlock; i <= currentBlock; i++) {
-      const block = await provider.getBlock(i, true);
-      if (block) {
-        blocks.push(block);
+    // 使用批量查询获取区块
+    const blockPromises = [];
+    const batchSize = 10; // 每次查询10个区块
+    for (let i = fromBlock; i <= currentBlock; i += batchSize) {
+      const endBlock = Math.min(i + batchSize - 1, currentBlock);
+      blockPromises.push(provider.getBlock(i, true));
+      if (i + 1 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 1, true));
+      }
+      if (i + 2 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 2, true));
+      }
+      if (i + 3 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 3, true));
+      }
+      if (i + 4 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 4, true));
+      }
+      if (i + 5 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 5, true));
+      }
+      if (i + 6 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 6, true));
+      }
+      if (i + 7 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 7, true));
+      }
+      if (i + 8 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 8, true));
+      }
+      if (i + 9 <= endBlock) {
+        blockPromises.push(provider.getBlock(i + 9, true));
       }
     }
 
+    const blocks = await Promise.all(blockPromises);
+    const validBlocks = blocks.filter(block => block !== null);
+
     // 过滤出合约交互
     const contractInteractions = [];
-    for (const block of blocks) {
+    for (const block of validBlocks) {
       for (const tx of block.transactions) {
         if (tx.to && tx.to.toLowerCase() === address.toLowerCase() && tx.data !== '0x') {
           contractInteractions.push({
