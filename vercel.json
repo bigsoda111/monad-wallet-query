@@ -14,7 +14,7 @@
   ],
   "env": {
     "PORT": "3000",
-    "MONGODB_URI": "@mongodb_uri",
-    "RPC_URL": "@rpc_url"
+    "MONGODB_URI": "mongodb://localhost:27017/monad_wallets",
+    "RPC_URL": "https://testnet-rpc.monad.xyz"
   }
 } 
