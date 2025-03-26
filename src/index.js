@@ -1,48 +1,45 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { ethers } = require('ethers');
 const NodeCache = require('node-cache');
 const mongoose = require('mongoose');
 
 const app = express();
-const cache = new NodeCache({ stdTTL: 300 }); // 5分钟缓存
+const port = process.env.PORT || 3000;
 
 // 中间件
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
-// Monad RPC配置
-const RPC_URL = "https://testnet-rpc.monad.xyz";
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+// 静态文件服务
+app.use(express.static(path.join(__dirname, '../public')));
 
-// MongoDB模型
-const WalletSchema = new mongoose.Schema({
-  address: { type: String, unique: true },
-  rank: Number,
-  balance: String,
-  activeDays: {
-    day: Number,
-    week: Number,
-    month: Number
-  },
-  firstTxTime: Date,
-  lastTxTime: Date,
-  txCount: Number,
-  contractCount: Number,
-  updatedAt: Date
-});
-
-const Wallet = mongoose.model('Wallet', WalletSchema);
-
-// 连接MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/monad_wallets')
+// 数据库连接
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// API路由
-app.get('/api/query/:address', async (req, res) => {
+// 缓存配置
+const cache = new NodeCache({ stdTTL: 300 }); // 5分钟缓存
+
+// MongoDB Schema
+const walletSchema = new mongoose.Schema({
+  address: { type: String, unique: true },
+  rank: Number,
+  balance: String,
+  activeDays: Number,
+  transactionTimes: Number,
+  transactionCount: Number,
+  contractCount: Number,
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Wallet = mongoose.model('Wallet', walletSchema);
+
+// API 路由
+app.get('/api/wallet/:address', async (req, res) => {
   try {
     const { address } = req.params;
     
@@ -58,36 +55,23 @@ app.get('/api/query/:address', async (req, res) => {
     }
 
     // 获取余额
+    const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
     const balance = await provider.getBalance(address);
     const formattedBalance = ethers.formatEther(balance);
 
     // 获取交易历史
-    const currentBlock = await provider.getBlockNumber();
-    const dayBlocks = 86400; // 一天的区块数
-    const weekBlocks = dayBlocks * 7;
-    const monthBlocks = dayBlocks * 30;
-
-    // 获取交易历史（这里需要实现具体的交易历史查询逻辑）
-    const txHistory = await getTransactionHistory(address, currentBlock - monthBlocks, currentBlock);
-
-    // 计算活跃天数
-    const activeDays = {
-      day: calculateActiveDays(txHistory, dayBlocks),
-      week: calculateActiveDays(txHistory, weekBlocks),
-      month: calculateActiveDays(txHistory, monthBlocks)
-    };
-
-    // 获取合约交互次数
-    const contractCount = await getContractInteractions(address);
+    const transactions = await getTransactionHistory(address);
+    const activeDays = calculateActiveDays(transactions);
+    const contractInteractions = await getContractInteractions(address);
 
     const walletData = {
       address,
+      rank: 0, // 需要实现排名逻辑
       balance: formattedBalance,
       activeDays,
-      firstTxTime: txHistory[0]?.timestamp || null,
-      lastTxTime: txHistory[txHistory.length - 1]?.timestamp || null,
-      txCount: txHistory.length,
-      contractCount,
+      transactionTimes: transactions.length,
+      transactionCount: transactions.length,
+      contractCount: contractInteractions.length,
       updatedAt: new Date()
     };
 
@@ -98,17 +82,17 @@ app.get('/api/query/:address', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 更新缓存
+    // 缓存数据
     cache.set(address, walletData);
 
     res.json(walletData);
   } catch (error) {
-    console.error('Query error:', error);
+    console.error('Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.post('/api/batch-query', async (req, res) => {
+app.post('/api/wallet/batch', async (req, res) => {
   try {
     const { addresses } = req.body;
     
@@ -116,63 +100,32 @@ app.post('/api/batch-query', async (req, res) => {
       return res.status(400).json({ error: 'Invalid addresses array' });
     }
 
-    // 验证所有地址
     const validAddresses = addresses.filter(addr => ethers.isAddress(addr));
     if (validAddresses.length === 0) {
       return res.status(400).json({ error: 'No valid addresses provided' });
     }
 
-    // 并行查询所有地址
     const results = await Promise.all(
-      validAddresses.map(addr => getWalletData(addr))
+      validAddresses.map(async (address) => {
+        try {
+          const response = await fetch(`${req.protocol}://${req.get('host')}/api/wallet/${address}`);
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error(`Error fetching data for ${address}:`, error);
+          return { address, error: 'Failed to fetch data' };
+        }
+      })
     );
 
     res.json(results);
   } catch (error) {
-    console.error('Batch query error:', error);
+    console.error('Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 辅助函数
-async function getTransactionHistory(address, fromBlock, toBlock) {
-  // 这里需要实现具体的交易历史查询逻辑
-  // 可以使用eth_getLogs或其他RPC方法
-  return [];
-}
-
-function calculateActiveDays(txHistory, blockRange) {
-  // 实现活跃天数计算逻辑
-  return 0;
-}
-
-async function getContractInteractions(address) {
-  // 实现合约交互次数查询逻辑
-  return 0;
-}
-
-async function getWalletData(address) {
-  // 检查缓存
-  const cachedData = cache.get(address);
-  if (cachedData) {
-    return cachedData;
-  }
-
-  // 从数据库获取
-  const dbData = await Wallet.findOne({ address });
-  if (dbData) {
-    cache.set(address, dbData);
-    return dbData;
-  }
-
-  // 如果数据库中没有，则重新查询
-  const response = await fetch(`/api/query/${address}`);
-  const data = await response.json();
-  return data;
-}
-
 // 启动服务器
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 }); 
