@@ -110,10 +110,9 @@
             tr.innerHTML = `
                 <td>${data.address}</td>
                 <td>${data.balance}</td>
-                <td>${data.activeDays.day}/${data.activeDays.week}/${data.activeDays.month}</td>
-                <td>${formatDate(data.firstTxTime)}</td>
-                <td>${formatDate(data.lastTxTime)}</td>
-                <td>${data.txCount}</td>
+                <td>${data.activeDays}</td>
+                <td>${data.transactionTimes}</td>
+                <td>${data.transactionCount}</td>
                 <td>${data.contractCount}</td>
                 <td>${formatDate(data.updatedAt)}</td>
             `;
@@ -138,7 +137,7 @@
             hideError();
 
             try {
-                const response = await fetch(`/api/query/${address}`);
+                const response = await fetch(`/api/wallet/${address}`);
                 const data = await response.json();
 
                 if (response.ok) {
@@ -171,7 +170,7 @@
             hideError();
 
             try {
-                const response = await fetch('/api/batch-query', {
+                const response = await fetch('/api/wallet/batch', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
