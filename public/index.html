@@ -166,6 +166,11 @@
                 return;
             }
 
+            if (addresses.length > 10) {
+                showError('每次最多只能查询10个地址');
+                return;
+            }
+
             toggleLoading(true);
             hideError();
 
@@ -183,12 +188,31 @@
                 if (response.ok) {
                     const resultDiv = document.getElementById('batchResult');
                     resultDiv.innerHTML = '';
-                    resultDiv.appendChild(createTable(data));
+                    
+                    // 检查是否有错误结果
+                    const hasErrors = data.some(item => item.error);
+                    if (hasErrors) {
+                        const errorMessage = data
+                            .filter(item => item.error)
+                            .map(item => `${item.address}: ${item.error}`)
+                            .join('\n');
+                        showError(errorMessage);
+                    }
+                    
+                    // 显示成功的结果
+                    const successData = data.filter(item => !item.error);
+                    if (successData.length > 0) {
+                        resultDiv.appendChild(createTable(successData));
+                    }
                 } else {
                     showError(data.error || '批量查询失败');
+                    if (data.details) {
+                        console.error('Error details:', data.details);
+                    }
                 }
             } catch (error) {
                 showError('批量查询出错：' + error.message);
+                console.error('Error:', error);
             } finally {
                 toggleLoading(false);
             }
