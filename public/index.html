@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monad Wallet Data Query</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container { max-width: 1200px; }
+        .table-responsive { margin-top: 20px; }
+        .loading { display: none; }
+        .error { color: red; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Monad 测试网钱包数据查询</h1>
+        
+        <!-- 单个地址查询 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">单个地址查询</h5>
+                <div class="input-group mb-3">
+                    <input type="text" id="singleAddress" class="form-control" placeholder="输入钱包地址">
+                    <button class="btn btn-primary" onclick="querySingleAddress()">查询</button>
+                </div>
+                <div id="singleResult" class="table-responsive"></div>
+            </div>
+        </div>
+
+        <!-- 批量查询 -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">批量查询</h5>
+                <div class="mb-3">
+                    <textarea id="batchAddresses" class="form-control" rows="5" placeholder="输入多个钱包地址，每行一个"></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="queryBatchAddresses()">批量查询</button>
+                <div id="batchResult" class="table-responsive"></div>
+            </div>
+        </div>
+
+        <!-- 加载提示 -->
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div id="error" class="error"></div>
+    </div>
+
+    <script>
+        // 显示/隐藏加载提示
+        function toggleLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        // 隐藏错误信息
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // 创建表格
+        function createTable(data) {
+            const table = document.createElement('table');
+            table.className = 'table table-striped';
+            
+            // 表头
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th>地址</th>
+                    <th>余额</th>
+                    <th>活跃天数</th>
+                    <th>首次交易</th>
+                    <th>最后交易</th>
+                    <th>交易数</th>
+                    <th>合约交互</th>
+                    <th>更新时间</th>
+                </tr>
+            `;
+            table.appendChild(thead);
+
+            // 表格内容
+            const tbody = document.createElement('tbody');
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    tbody.appendChild(createTableRow(item));
+                });
+            } else {
+                tbody.appendChild(createTableRow(data));
+            }
+            table.appendChild(tbody);
+
+            return table;
+        }
+
+        // 创建表格行
+        function createTableRow(data) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${data.address}</td>
+                <td>${data.balance}</td>
+                <td>${data.activeDays.day}/${data.activeDays.week}/${data.activeDays.month}</td>
+                <td>${formatDate(data.firstTxTime)}</td>
+                <td>${formatDate(data.lastTxTime)}</td>
+                <td>${data.txCount}</td>
+                <td>${data.contractCount}</td>
+                <td>${formatDate(data.updatedAt)}</td>
+            `;
+            return tr;
+        }
+
+        // 格式化日期
+        function formatDate(date) {
+            if (!date) return 'N/A';
+            return new Date(date).toLocaleString();
+        }
+
+        // 查询单个地址
+        async function querySingleAddress() {
+            const address = document.getElementById('singleAddress').value.trim();
+            if (!address) {
+                showError('请输入钱包地址');
+                return;
+            }
+
+            toggleLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch(`/api/query/${address}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    const resultDiv = document.getElementById('singleResult');
+                    resultDiv.innerHTML = '';
+                    resultDiv.appendChild(createTable(data));
+                } else {
+                    showError(data.error || '查询失败');
+                }
+            } catch (error) {
+                showError('查询出错：' + error.message);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // 批量查询地址
+        async function queryBatchAddresses() {
+            const addresses = document.getElementById('batchAddresses').value
+                .split('\n')
+                .map(addr => addr.trim())
+                .filter(addr => addr);
+
+            if (addresses.length === 0) {
+                showError('请输入至少一个钱包地址');
+                return;
+            }
+
+            toggleLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch('/api/batch-query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ addresses })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const resultDiv = document.getElementById('batchResult');
+                    resultDiv.innerHTML = '';
+                    resultDiv.appendChild(createTable(data));
+                } else {
+                    showError(data.error || '批量查询失败');
+                }
+            } catch (error) {
+                showError('批量查询出错：' + error.message);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+    </script>
+</body>
+</html> 
